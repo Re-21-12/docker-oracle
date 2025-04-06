@@ -1,0 +1,16 @@
+ backend:
+
+    build:
+      context: ../backend-bd/my-app
+    container_name: backend-bd
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../backend-bd/my-app:/app
+      - ../backend-bd/my-app/src/entities:/app/src/entities # Montar el volumen para 
+    working_dir: /app
+    command: npm run start:dev
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
