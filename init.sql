@@ -921,13 +921,15 @@ CREATE SEQUENCE inicio_sesion_secuencia START WITH 1 INCREMENT BY 1;
 
 CREATE OR REPLACE PROCEDURE registrar_inicio_sesion (
     p_numero_tarjeta IN NUMBER,
-    p_pin            IN NUMBER
+    p_pin            IN NUMBER,
+    p_codigo_cajero  IN NUMBER  -- Nuevo parámetro: código del cajero
 )
 AS
     v_codigo_caja    NUMBER;
     v_codigo_titular NUMBER;
     v_codigo_cliente NUMBER;
     v_fecha_hora     TIMESTAMP;
+    v_ubicacion      VARCHAR2(100);
 BEGIN
     -- Validamos y obtenemos los datos de la tarjeta
     SELECT codigo_caja, codigo_titular
@@ -935,24 +937,32 @@ BEGIN
       FROM tarjeta
      WHERE numero_tarjeta = p_numero_tarjeta
        AND pin = p_pin;
-    
+       
     -- Obtenemos el código del cliente a partir de la caja de ahorro
     SELECT codigo_cliente
       INTO v_codigo_cliente
       FROM caja_ahorro
      WHERE codigo_caja = v_codigo_caja;
-    
+       
+    -- Obtener la ubicación del cajero dado su código
+    SELECT ubicacion
+      INTO v_ubicacion
+      FROM cajero
+     WHERE codigo_cajero = p_codigo_cajero;
+       
     -- Obtenemos la fecha y hora actual
     v_fecha_hora := SYSTIMESTAMP;
-    
-    -- Insertamos en la tabla de auditoría usando la secuencia
+       
+    -- Insertamos en la tabla de la bitácora de inicio de sesión usando la secuencia
     INSERT INTO inicio_sesion (
         secuencia,
         numero_tarjeta,
         codigo_caja,
         codigo_cliente,
         codigo_titular,
-        fecha_hora
+        fecha_hora,
+        codigo_cajero,
+        ubicacion
     )
     VALUES (
         inicio_sesion_secuencia.NEXTVAL,
@@ -960,14 +970,16 @@ BEGIN
         v_codigo_caja,
         v_codigo_cliente,
         v_codigo_titular,
-        v_fecha_hora
+        v_fecha_hora,
+        p_codigo_cajero,
+        v_ubicacion
     );
-    
+       
     COMMIT;
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
         ROLLBACK;
-        RAISE_APPLICATION_ERROR(-20001, 'Número de tarjeta o PIN incorrecto.');
+        RAISE_APPLICATION_ERROR(-20001, 'Número de tarjeta, PIN o código de cajero incorrecto.');
     WHEN OTHERS THEN
         ROLLBACK;
         RAISE;
@@ -983,7 +995,128 @@ END;
 
 execute registrar_inicio_sesion(123456789, 1234);
 
-
+CREATE OR REPLACE TRIGGER actualizar_saldo_pago
+AFTER INSERT ON pago
+FOR EACH ROW
+DECLARE
+    v_saldo_anterior     NUMBER(12,2);
+    v_saldo_nuevo        NUMBER(12,2);
+    v_monto_pagado_actual NUMBER(12,2);
+    v_meses_pendientes   INTEGER;
+    v_codigo_cliente     INTEGER;
+BEGIN
+    -- Obtener el saldo pendiente, los meses pendientes y el monto pagado actual del préstamo
+    SELECT saldo_pendiente, meses_pendiente, monto_pagado, codigo_cliente
+      INTO v_saldo_anterior, v_meses_pendientes, v_monto_pagado_actual, v_codigo_cliente
+      FROM prestamo
+     WHERE codigo_prestamo = :NEW.codigo_prestamo;
+ 
+    -- Calcular el nuevo saldo pendiente
+    v_saldo_nuevo := v_saldo_anterior - :NEW.monto_pago;
+ 
+    -- Restar 1 mes a los meses pendientes si el saldo sigue siendo mayor que 0
+    IF v_saldo_nuevo > 0 THEN
+        v_meses_pendientes := v_meses_pendientes - 1;
+    ELSE
+        v_meses_pendientes := 0;
+    END IF;
+ 
+    -- Actualizar el saldo pendiente, los meses pendientes y el monto pagado (sumando el pago)
+    UPDATE prestamo
+       SET saldo_pendiente = v_saldo_nuevo,
+           meses_pendiente = v_meses_pendientes,
+           monto_pagado    = NVL(v_monto_pagado_actual, 0) + :NEW.monto_pago
+     WHERE codigo_prestamo = :NEW.codigo_prestamo;
+ 
+    -- Insertar el registro de pago en la bitácora
+    INSERT INTO bitacora_pago
+    (num_transaccion, 
+     codigo_prestamo, 
+     monto_pago, 
+     fecha_pago, 
+     saldo_anterior, 
+     saldo_nuevo, 
+     meses_pendiente, 
+     tipo_transaccion, 
+     usuario_transaccion, 
+     fecha_transaccion)
+    VALUES 
+    (bitacora_pago_seq.NEXTVAL,      -- Usar la secuencia para generar el ID
+     :NEW.codigo_prestamo, 
+     :NEW.monto_pago, 
+     :NEW.fecha_pago, 
+     v_saldo_anterior, 
+     v_saldo_nuevo, 
+     v_meses_pendientes, 
+     'P',                          -- Tipo de transacción 'P' para pago
+     USER,                         -- O el nombre del usuario si corresponde
+     SYSDATE);                     -- Fecha actual de la transacción
+END;
+/
+ 
+ 
+ 
+ 
+--- PROCEDIMIENTO PARA HACER UN PAGO DE PRESTAMOS
+ 
+ 
+ 
+--- SECUENCIA PARA CREAR EL IDENTIFICADOR DEL PAGO
+CREATE SEQUENCE pago_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
+ 
+ 
+CREATE OR REPLACE PROCEDURE realizar_pago_prestamo(
+    p_numero_tarjeta IN NUMBER,
+    p_monto_pago     IN NUMBER
+)
+IS
+    -- Variables para la caja de ahorro y cliente asociadas a la tarjeta
+    v_codigo_caja    caja_ahorro.codigo_caja%TYPE;
+    v_saldo_caja     caja_ahorro.saldo_caja%TYPE;
+    v_codigo_cliente cliente.codigo_cliente%TYPE;
+    -- Variable para el préstamo activo del cliente
+    v_codigo_prestamo prestamo.codigo_prestamo%TYPE;
+BEGIN
+    -- 1. Obtener la caja de ahorro, el cliente y su saldo mediante la tarjeta
+    SELECT t.codigo_caja, c.codigo_cliente, c.saldo_caja
+      INTO v_codigo_caja, v_codigo_cliente, v_saldo_caja
+      FROM tarjeta t
+      JOIN caja_ahorro c
+        ON t.codigo_caja = c.codigo_caja
+     WHERE t.numero_tarjeta = p_numero_tarjeta;
+    
+    -- 2. Validar si la caja de ahorro cuenta con los fondos suficientes
+    IF v_saldo_caja < p_monto_pago THEN
+         RAISE_APPLICATION_ERROR(-20001, 'Fondos insuficientes en la caja de ahorro.');
+    END IF;
+    
+    -- 3. Actualizar la caja de ahorro descontando el monto a pagar
+    UPDATE caja_ahorro
+       SET saldo_caja = saldo_caja - p_monto_pago
+     WHERE codigo_caja = v_codigo_caja;
+    
+    -- 4. Seleccionar el préstamo activo del cliente (estado 'ACTIVO')
+    SELECT codigo_prestamo
+      INTO v_codigo_prestamo
+      FROM prestamo
+     WHERE codigo_cliente = v_codigo_cliente
+       AND estado_prestamo = 'ACTIVO'
+       AND ROWNUM = 1;
+    
+    ---INSERT EN LA TABLA PAGO
+    INSERT INTO pago (numero_pago, fecha_pago, monto_pago, codigo_prestamo)
+    VALUES (pago_seq.NEXTVAL, SYSDATE, p_monto_pago, v_codigo_prestamo);
+    
+    -- Confirmar la transacción si no ha ocurrido error
+    COMMIT;
+    
+EXCEPTION
+    -- Manejo de errores si ocurre algún error, ROLLBACK 
+    WHEN OTHERS THEN
+         ROLLBACK;
+         RAISE;
+END;
+/
 
 
 --privilegios sobre usuario atm para que pueda ejecutar los procedimientos DE REALIZAR_TRANSFERENCIA Y REALIZAR_EXTRACCION
