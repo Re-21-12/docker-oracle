@@ -170,35 +170,7 @@ ALTER TABLE prestamo ADD CONSTRAINT prestamo_cliente_FK FOREIGN KEY (codigo_clie
 REFERENCES cliente (codigo_cliente);
  
  
--- insert 
-INSERT INTO cliente (codigo_cliente, primer_nombre, segundo_nombre, tercer_nombre, primer_apellido, segundo_apellido, edad, direccion)
-VALUES (2, 'Cristiano', 'Leonel', 'Neymar', 'Castañeda', 'Chan', 1, 'Boca Del Monte');
- 
-INSERT INTO cliente (codigo_cliente, primer_nombre, segundo_nombre, tercer_nombre, primer_apellido, segundo_apellido, edad, direccion)
-VALUES (3, 'Carlos', 'Estiven', 'Victor', 'Garcia', 'Juan', 25, 'villa canales');
-SELECT * FROM cliente;
- 
-INSERT INTO prestamo (codigo_prestamo, monto_inicial, monto_pagado, saldo_pendiente, fecha_otorgado, fecha_vencimiento, estado_prestamo, monto_total, interes, meses_pendiente, codigo_cliente)
-VALUES (2, 20000.00, 0.00, 20000.00, TO_DATE('2025-01-01', 'YYYY-MM-DD'), TO_DATE('2025-12-31', 'YYYY-MM-DD'), 'ACTIVO', 22000.00, 0.10, 12, 2);
-SELECT * FROM PRESTAMO;
-COMMIT;
- 
-INSERT INTO TITULAR (CODIGO_TITULAR, PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE, PRIMER_APELLIDO, SEGUNDO_APELLIDO, DIRECCION, EDAD) 
-VALUES (2, 'JUAN', 'PEDRO', 'JUAN', 'PEREZ', 'GOMEZ', 'GUATEMALA', 25);
-SELECT * FROM TITULAR;
- 
- 
-INSERT INTO caja_ahorro (codigo_caja, descripcion, codigo_cliente, saldo_caja)
-VALUES (1, 'Cuenta Ahorro Principal', 2, 15000.00);
- 
-INSERT INTO caja_ahorro (codigo_caja, descripcion, codigo_cliente, saldo_caja)
-VALUES (2, 'Cuenta Ahorro POBRE', 3, 10.00);
-SELECT * FROM CAJA_AHORRO;
- 
- 
-INSERT INTO cajero (codigo_cajero, ubicacion, saldo)
-VALUES (101, 'Sucursal Principal', 10000.00); 
-SELECT * FROM cajero;
+
 
 CREATE OR REPLACE PROCEDURE realizar_pago_prestamo (
     p_codigo_prestamo IN prestamo.codigo_prestamo%TYPE,
@@ -386,13 +358,7 @@ BEGIN
 END;
 /
  
---COMPROOBAR PAGO 
-INSERT INTO pago (numero_pago,codigo_prestamo, monto_pago, fecha_pago)
-VALUES (3,1, 1000.00, TO_DATE('2025-03-25', 'YYYY-MM-DD'));
-SELECT * FROM prestamo;
-SELECT * FROM bitacora_pago;
-SELECT * FROM pago;
- 
+
  
  
  
@@ -404,29 +370,7 @@ CREATE SEQUENCE pago_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
  
  
  
- 
-SELECT * FROM CLIENTE;
-SELECT * FROM CAJA_AHORRO;
-SELECT * FROM TARJETA;
-SELECT * FROM TITULAR;
-SELECT * FROM PRESTAMO;
-SELECT * FROM PAGO;
-SELECT * FROM Bitacora_pago;
- 
-UPDATE CAJA_AHORRO SET SALDO_CAJA = 10000.00 WHERE CODIGO_CAJA = 2;
-COMMIT;
- 
-INSERT INTO TARJETA (NUMERO_TARJETA, MARCA, FECHA_VENCIMIENTO, PIN, CODIGO_CAJA, CODIGO_TITULAR)
-VALUES (123456, 'VISA', TO_DATE('2026-12-31', 'YYYY-MM-DD'), 1244, 1, 2);
-COMMIT;
- 
-BEGIN
-    realizar_pago_prestamo(123456, 1, 2000);
-END;
-/
- 
-COMMIT;
- 
+
  
  
 --STORES PROCEDURES PARA TRANSFERENCIAS ENTRE CUENTAS
@@ -501,15 +445,7 @@ EXCEPTION
 END realizar_transferencia;
 /
  
--- CUENTA TITULAR, CUENTA ORIGEN, CUENTA DESTINO, MONTO Y CODIGO CAJERO
-EXECUTE realizar_transferencia(1, 1, 2, 500.00, 101);
- 
-SELECT * FROM titular;
-SELECT * FROM CAJERO;
- 
-SELECT * FROM CAJA_AHORRO;
-SELECT * FROM movimiento;
- 
+
  
  
 --STORED PROCEDURE PARA EXTRAER DINERO
@@ -592,16 +528,7 @@ EXCEPTION
 END realizar_extraccion;
 /
  
- 
- 
-SELECT * FROM titular;
-SELECT * FROM CAJERO;
- 
-SELECT * FROM CAJA_AHORRO;
- 
-SELECT * FROM movimiento;
---CODIGO TITULAR, CODIGO CAJA, MONTO Y CODIGO CAJERO
-EXEC realizar_extraccion(1, 1, 500, 101);
+
  
  
 --AMBOS STORED PROCEDURED FUNCIONAN 
@@ -648,11 +575,7 @@ BEGIN
 END;
 /
  
-SELECT * FROM CAJERO;
-SELECT * FROM BITACORA;
- 
-INSERT INTO CAJERO(CODIGO_CAJERO, UBICACION, SALDO) VALUES (102, 'AMATITLAN', 12500.00);
-UPDATE CAJERO SET SALDO = 35000.00 WHERE CODIGO_CAJERO = 102;
+
  
  
 --TRIGGER PARA CAJA_AHORRO
@@ -692,13 +615,7 @@ BEGIN
   END IF;
 END;
 /
- 
-SELECT * FROM BITACORA;
-SELECT * FROM CAJA_AHORRO;
-INSERT INTO caja_ahorro (codigo_caja, descripcion, codigo_cliente, saldo_caja)
-VALUES (3, 'Cuenta Ahorro LIBRE', 2, 15000.00);
- 
-DELETE FROM CAJA_AHORRO WHERE CODIGO_CAJA = 3;
+
  
  
 --TRIGER PARA CLIENTE
@@ -916,12 +833,7 @@ BEGIN
 END;
 /
  
-SELECT * FROM PRESTAMO;
-SELECT * FROM BITACORA;
- 
-INSERT INTO prestamo (codigo_prestamo, monto_inicial, monto_pagado, saldo_pendiente, fecha_otorgado, fecha_vencimiento, estado_prestamo, monto_total, interes, meses_pendiente, codigo_cliente)
-VALUES (2, 20000.00, 0.00, 20000.00, TO_DATE('2025-01-01', 'YYYY-MM-DD'), TO_DATE('2025-12-31', 'YYYY-MM-DD'), 'ACTIVO', 22000.00, 0.10, 12, 1);
- 
+
  
 --TRIGER PARA TITULAR
 CREATE OR REPLACE TRIGGER MOV_TITULAR
@@ -980,17 +892,7 @@ BEGIN
 END;
 /
  
-INSERT INTO TITULAR (CODIGO_TITULAR, PRIMER_NOMBRE, SEGUNDO_NOMBRE, TERCER_NOMBRE, PRIMER_APELLIDO, SEGUNDO_APELLIDO, DIRECCION, EDAD) 
-VALUES (2, 'JONATHAN', 'JOEL', NULL,  'CHAN', 'CUELLAR', 'GUATEMALA', 22);
- 
-UPDATE TITULAR SET SEGUNDO_NOMBRE = 'GEOBANY' WHERE CODIGO_TITULAR = 2;
- 
-SELECT * FROM TITULAR;
-SELECT * FROM BITACORA;
- 
-DELETE FROM TITULAR WHERE CODIGO_TITULAR = 2;
- 
-COMMIT;
+
  
  
 --TRIGER PARA TABLA TARJETA
@@ -1043,20 +945,7 @@ BEGIN
 END;
 /
  
-INSERT INTO TARJETA (NUMERO_TARJETA, MARCA, FECHA_VENCIMIENTO, PIN, CODIGO_CAJA)
-VALUES (123456789, 'VISA', TO_DATE('2026-12-31', 'YYYY-MM-DD'), 1234, 1);
- 
- 
- 
-SELECT * FROM BITACORA;
-SELECT * FROM TARJETA;
-SELECT * FROM CAJA_AHORRO;
-SELECT * FROM TITULAR;
- 
- 
-INSERT INTO tarjeta (numero_tarjeta, marca, fecha_vencimiento, pin, codigo_caja, codigo_titular)
-VALUES (123456789, 'VISA', TO_DATE('2028-12-31', 'YYYY-MM-DD'), 1234, 1, 1);
- 
+
  
  
  
@@ -1138,11 +1027,7 @@ EXCEPTION
         RAISE;
 END;
 /
- 
-SELECT * FROM INICIO_SESION;
-SELECT * FROM cajero;
-SELECT * FROM tarjeta;
- 
+
  
 ---tarjeta, pin y codigo_cajero como argumentos
 BEGIN
@@ -1234,6 +1119,7 @@ GRANT SELECT ON BANCARIO.titular TO atm;
 GRANT SELECT ON BANCARIO.movimiento TO atm;
 GRANT SELECT ON BANCARIO.tarjeta TO atm;
 GRANT SELECT ON BANCARIO.cliente TO atm;
+GRANT SELECT ON BANCARIO.prestamo TO atm;
 
 
 -- Permitir INSERT si es necesario
