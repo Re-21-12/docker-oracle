@@ -169,7 +169,12 @@ REFERENCES prestamo (codigo_prestamo);
 ALTER TABLE prestamo ADD CONSTRAINT prestamo_cliente_FK FOREIGN KEY (codigo_cliente) 
 REFERENCES cliente (codigo_cliente);
  
- 
+CREATE TABLE interes (
+    codigo_interes      NUMBER(6)      NOT NULL,
+    porcentaje_interes  NUMBER(6,2)    NOT NULL,
+    descripcion         VARCHAR2(100),
+    CONSTRAINT pk_interes PRIMARY KEY (codigo_interes)
+);
 
 
 CREATE OR REPLACE PROCEDURE realizar_pago_prestamo (
@@ -298,65 +303,7 @@ CREATE SEQUENCE bitacora_pago_seq START WITH 1 INCREMENT BY 1 NOCACHE NOCYCLE;
 SELECT * FROM BITACORA_PAGO;
  
  
---TRIGGER PARA PAGOS-ACTUALIZA EL SALDO DEL PRESTAMO E INSERTA EN BITACORA
-CREATE OR REPLACE TRIGGER actualizar_saldo_pago
-AFTER INSERT ON pago
-FOR EACH ROW
-DECLARE
-    v_saldo_anterior     NUMBER(12,2);
-    v_saldo_nuevo        NUMBER(12,2);
-    v_monto_pagado_actual NUMBER(12,2);
-    v_meses_pendientes   INTEGER;
-    v_codigo_cliente     INTEGER;
-BEGIN
-    -- Obtener el saldo pendiente, los meses pendientes y el monto pagado actual del préstamo
-    SELECT saldo_pendiente, meses_pendiente, monto_pagado, codigo_cliente
-      INTO v_saldo_anterior, v_meses_pendientes, v_monto_pagado_actual, v_codigo_cliente
-      FROM prestamo
-     WHERE codigo_prestamo = :NEW.codigo_prestamo;
- 
-    -- Calcular el nuevo saldo pendiente
-    v_saldo_nuevo := v_saldo_anterior - :NEW.monto_pago;
- 
-    -- Restar 1 mes a los meses pendientes si el saldo sigue siendo mayor que 0
-    IF v_saldo_nuevo > 0 THEN
-        v_meses_pendientes := v_meses_pendientes - 1;
-    ELSE
-        v_meses_pendientes := 0;
-    END IF;
- 
-    -- Actualizar el saldo pendiente, los meses pendientes y el monto pagado (sumando el pago)
-    UPDATE prestamo
-       SET saldo_pendiente = v_saldo_nuevo,
-           meses_pendiente = v_meses_pendientes,
-           monto_pagado    = NVL(v_monto_pagado_actual, 0) + :NEW.monto_pago
-     WHERE codigo_prestamo = :NEW.codigo_prestamo;
- 
-    -- Insertar el registro de pago en la bitácora
-    INSERT INTO bitacora_pago
-    (num_transaccion, 
-     codigo_prestamo, 
-     monto_pago, 
-     fecha_pago, 
-     saldo_anterior, 
-     saldo_nuevo, 
-     meses_pendiente, 
-     tipo_transaccion, 
-     usuario_transaccion, 
-     fecha_transaccion)
-    VALUES 
-    (bitacora_pago_seq.NEXTVAL,      -- Usar la secuencia para generar el ID
-     :NEW.codigo_prestamo, 
-     :NEW.monto_pago, 
-     :NEW.fecha_pago, 
-     v_saldo_anterior, 
-     v_saldo_nuevo, 
-     v_meses_pendientes, 
-     'P',                          -- Tipo de transacción 'P' para pago
-     USER,                         -- O el nombre del usuario si corresponde
-     SYSDATE);                     -- Fecha actual de la transacción
-END;
-/
+
  
 
  
@@ -812,8 +759,8 @@ BEGIN
       INSERT INTO BITACORA VALUES (SECUENCIA, 'PRESTAMO', 'MONTO_TOTAL', :NEW.MONTO_TOTAL, :OLD.MONTO_TOTAL, USER, V_FECHA, 'U', :NEW.CODIGO_PRESTAMO);
     END IF;
  
-    IF :NEW.INTERES != :OLD.INTERES THEN 
-      INSERT INTO BITACORA VALUES (SECUENCIA, 'PRESTAMO', 'INTERES', :NEW.INTERES, :OLD.INTERES, USER, V_FECHA, 'U', :NEW.CODIGO_PRESTAMO);
+    IF :NEW.CODIGO_INTERES != :OLD.CODIGO_INTERES THEN 
+      INSERT INTO BITACORA VALUES (SECUENCIA, 'PRESTAMO', 'INTERES', :NEW.CODIGO_INTERES, :OLD.CODIGO_INTERES, USER, V_FECHA, 'U', :NEW.CODIGO_PRESTAMO);
     END IF;
  
     IF :NEW.MESES_PENDIENTE != :OLD.MESES_PENDIENTE THEN 
@@ -830,10 +777,8 @@ BEGIN
     SECUENCIA := SEQUENCE.NEXTVAL;
     INSERT INTO BITACORA VALUES (SECUENCIA, 'PRESTAMO', 'CODIGO_PRESTAMO', NULL, :OLD.CODIGO_PRESTAMO, USER, V_FECHA, 'D', :OLD.CODIGO_PRESTAMO);
   END IF;
-END;
+END; 
 /
- 
-
  
 --TRIGER PARA TITULAR
 CREATE OR REPLACE TRIGGER MOV_TITULAR
@@ -1061,7 +1006,6 @@ END;
 /
  
  
---trigger para generar todos los pagos y los inserta en la tabla pago estado por defecto "pendiente"
 CREATE OR REPLACE TRIGGER generar_pagos_prestamo
 AFTER INSERT ON prestamo
 FOR EACH ROW
